@@ -162,10 +162,9 @@ impl Conns {
 
 src/
 ├── main.rs: The main entry point of the server
-├── lib.rs: data structure and imports
+├── lib.rs: core data structure (Conn, Conns) and imports
 ├── pg.rs: core postgres related logic, e.g. implementation of Conns
-├── mcp.rs: MCP server implementation
-└── utils.rs: utility functions if needed
+└── mcp.rs: MCP related data structure andserver implementation
 
 ### Dependencies
 
@@ -249,9 +248,7 @@ impl ServerHandler for Calculator {
     }
 }
 
-
-
-/// npx @modelcontextprotocol/inspector cargo run
+/// to test mcp server, run `npx @modelcontextprotocol/inspector cargo run`
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize the tracing subscriber with file and stdout logging
@@ -271,6 +268,35 @@ async fn main() -> Result<()> {
     service.waiting().await?;
     Ok(())
 }
+```
+
+schemars: 0.8
+
+Example:
+
+```rust
+use schemars::{schema_for, JsonSchema};
+use serde::{Deserialize, Serialize};
+
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MyStruct {
+    #[serde(rename = "myNumber")]
+    pub my_int: i32,
+    pub my_bool: bool,
+    #[serde(default)]
+    pub my_nullable_enum: Option<MyEnum>,
+}
+
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(untagged)]
+pub enum MyEnum {
+    StringNewType(String),
+    StructVariant { floats: Vec<f32> },
+}
+
+let schema = schema_for!(MyStruct);
+println!("{}", serde_json::to_string_pretty(&schema).unwrap());
 ```
 
 sqlparser: 0.55
