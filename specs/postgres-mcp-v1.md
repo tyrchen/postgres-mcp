@@ -98,72 +98,77 @@ pub(crate) struct Conn {
   pub(crate) pool: PgPool,
 }
 
+#[derive(Debug, Clone)]
 pub(crate) struct Conns {
   pub(crate) inner: Arc<ArcSwap<HashMap<String, Conn>>>,
+}
+
+#[derive(Debug, Clone)]
+pub PgMcp {
+    conns: Conns,
 }
 
 #[derive(Debug, FromRow, Serialize, Deserialize)]
 struct JsonRow(serde_json::Value);
 
 impl Conns {
-  fn new() -> Self {
+  pub(crate) fn new() -> Self {
     ...
   }
 
   // return the conn id (uuid) if success
-  async fn register(&self, conn_str: String) -> Result<String, Error> {
+  pub(crate) async fn register(&self, conn_str: String) -> Result<String, Error> {
     let mut conns = self.inner.load();
     // use arc_swap to update the inner map
     ...
   }
 
-  fn unregister(&self, id: String) -> Result<(), Error> {
+  pub(crate) fn unregister(&self, id: String) -> Result<(), Error> {
     let mut conns = self.inner.load();
     // use arc_swap to update the inner map
     ...
   }
 
   // return the result as a json string (serialize Vec<JsonRow>)
-  async fn query(&self, id: &str, query: &str) -> Result<String, Error> { ... }
+  pub(crate) async fn query(&self, id: &str, query: &str) -> Result<String, Error> { ... }
 
   // return "success, rows_affected: <rows_affected>" if success
-  async fn insert(&self, id: &str, query: &str) -> Result<String, Error> { ... }
+  pub(crate) async fn insert(&self, id: &str, query: &str) -> Result<String, Error> { ... }
 
   // return "success, rows_affected: <rows_affected>" if success
-  async fn update(&self, id: &str, query: &str) -> Result<String, Error> { ... }
+  pub(crate) async fn update(&self, id: &str, query: &str) -> Result<String, Error> { ... }
 
   // return "success, rows_affected: <rows_affected>" if success
-  async fn delete(&self, id: &str, table: &str, pk: &str) -> Result<String, Error> { ... }
+  pub(crate) async fn delete(&self, id: &str, table: &str, pk: &str) -> Result<String, Error> { ... }
 
   // return "success" if success
-  async fn create_table(&self, id: &str, query: &str) -> Result<String, Error> { ... }
+  pub(crate) async fn create_table(&self, id: &str, query: &str) -> Result<String, Error> { ... }
 
   // return "success" if success
-  async fn drop_table(&self, id: &str, table: &str) -> Result<String, Error> { ... }
+  pub(crate) async fn drop_table(&self, id: &str, table: &str) -> Result<String, Error> { ... }
 
   // return "success" if success
-  async fn create_index(&self, id: &str, query: &str) -> Result<String, Error> { ... }
+  pub(crate) async fn create_index(&self, id: &str, query: &str) -> Result<String, Error> { ... }
 
   // return "success" if success
-  async fn drop_index(&self, id: &str, index: &str) -> Result<String, Error> { ... }
+  pub(crate) async fn drop_index(&self, id: &str, index: &str) -> Result<String, Error> { ... }
 
   // return the result as a json string (serialize Vec<JsonRow>), table name is "schema.table" or "table" if public schema
-  async fn describe(&self, id: &str, table: &str) -> Result<String, Error> { ... }
+  pub(crate) async fn describe(&self, id: &str, table: &str) -> Result<String, Error> { ... }
 
   // return the result as a json string (serialize Vec<JsonRow>)
-  async fn list_tables(&self, id: &str) -> Result<String, Error> { ... }
+  pub(crate) async fn list_tables(&self, id: &str) -> Result<String, Error> { ... }
 
 }
-
 ```
 
 ### Folder structure
 
 src/
 ├── main.rs: The main entry point of the server
-├── lib.rs: core data structure (Conn, Conns) and imports
+├── lib.rs: core data structure (Conn, Conns, PgMcp) and imports
 ├── pg.rs: core postgres related logic, e.g. implementation of Conns
-└── mcp.rs: MCP related data structure andserver implementation
+└── mcp.rs: implement of PgMcp (follow Calculator example of rmcp) and mcp server implementation
 
 ### Dependencies
 
