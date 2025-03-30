@@ -92,22 +92,26 @@ Drop an index on a table. We will generate the SQL statement and execute it agai
 ```rust
 
 #[derive(Debug, Clone)]
-struct Conn {
-  id: String,
-  conn_str: String,
-  pool: PgPool,
+pub(crate) struct Conn {
+  pub(crate) id: String,
+  pub(crate) conn_str: String,
+  pub(crate) pool: PgPool,
 }
 
-struct Conns {
-  inner: Arc<ArcSwap<HashMap<String, Conn>>>,
+pub(crate) struct Conns {
+  pub(crate) inner: Arc<ArcSwap<HashMap<String, Conn>>>,
 }
+
+#[derive(Serialize, Deserialize, FromRow)]
+pub(crate) struct JsonResult(Vec<PgRow>);
 
 impl Conns {
   fn new() -> Self {
     ...
   }
 
-  fn register(&self, id: String, conn_str: String) -> Result<String, Error> {
+  // return the conn id (uuid) if success
+  async fn register(&self, conn_str: String) -> Result<String, Error> {
     let mut conns = self.inner.load();
     // use arc_swap to update the inner map
     ...
@@ -119,12 +123,7 @@ impl Conns {
     ...
   }
 
-  fn get(&self, id: String) -> Result<&Conn, Error> {
-    let conns = self.inner.load();
-    ...
-  }
-
-  // return the result as a json string
+  // return the result as a json string (serialize JsonResult)
   async fn query(&self, id: &str, query: &str) -> Result<String, Error> { ... }
 
   // return "success, rows_affected: <rows_affected>" if success
@@ -148,10 +147,10 @@ impl Conns {
   // return "success" if success
   async fn drop_index(&self, id: &str, index: &str) -> Result<String, Error> { ... }
 
-  // return the result as a json string, table name is "schema.table" or "table" if public schema
+  // return the result as a json string (serialize JsonResult), table name is "schema.table" or "table" if public schema
   async fn describe(&self, id: &str, table: &str) -> Result<String, Error> { ... }
 
-  // return the result as a json string
+  // return the result as a json string (serialize JsonResult)
   async fn list_tables(&self, id: &str) -> Result<String, Error> { ... }
 
 }
