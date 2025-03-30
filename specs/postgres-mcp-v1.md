@@ -102,8 +102,8 @@ pub(crate) struct Conns {
   pub(crate) inner: Arc<ArcSwap<HashMap<String, Conn>>>,
 }
 
-#[derive(Serialize, Deserialize, FromRow)]
-pub(crate) struct JsonResult(Vec<PgRow>);
+#[derive(Debug, FromRow, Serialize, Deserialize)]
+struct JsonRow(serde_json::Value);
 
 impl Conns {
   fn new() -> Self {
@@ -123,7 +123,7 @@ impl Conns {
     ...
   }
 
-  // return the result as a json string (serialize JsonResult)
+  // return the result as a json string (serialize Vec<JsonRow>)
   async fn query(&self, id: &str, query: &str) -> Result<String, Error> { ... }
 
   // return "success, rows_affected: <rows_affected>" if success
@@ -147,10 +147,10 @@ impl Conns {
   // return "success" if success
   async fn drop_index(&self, id: &str, index: &str) -> Result<String, Error> { ... }
 
-  // return the result as a json string (serialize JsonResult), table name is "schema.table" or "table" if public schema
+  // return the result as a json string (serialize Vec<JsonRow>), table name is "schema.table" or "table" if public schema
   async fn describe(&self, id: &str, table: &str) -> Result<String, Error> { ... }
 
-  // return the result as a json string (serialize JsonResult)
+  // return the result as a json string (serialize Vec<JsonRow>)
   async fn list_tables(&self, id: &str) -> Result<String, Error> { ... }
 
 }
