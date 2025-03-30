@@ -1,6 +1,7 @@
 use anyhow::Error;
 use arc_swap::ArcSwap;
 use serde::{Deserialize, Serialize};
+use sqlparser::ast::Statement;
 use sqlx::postgres::PgPool;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -66,12 +67,11 @@ impl Conns {
             .get(id)
             .ok_or_else(|| anyhow::anyhow!("Connection not found"))?;
 
-        // Validate query is a SELECT statement
-        let dialect = sqlparser::dialect::PostgreSqlDialect {};
-        let ast = sqlparser::parser::Parser::parse_sql(&dialect, query)?;
-        if ast.len() != 1 || !matches!(ast[0], sqlparser::ast::Statement::Query(_)) {
-            return Err(anyhow::anyhow!("Only SELECT queries are allowed"));
-        }
+        let query = validate_sql(
+            query,
+            |stmt| matches!(stmt, Statement::Query(_)),
+            "Only SELECT queries are allowed",
+        )?;
 
         let query = format!(
             "WITH data AS ({}) SELECT JSON_AGG(data.*) as ret FROM data;",
@@ -91,14 +91,13 @@ impl Conns {
             .get(id)
             .ok_or_else(|| anyhow::anyhow!("Connection not found"))?;
 
-        // Validate query is an INSERT statement
-        let dialect = sqlparser::dialect::PostgreSqlDialect {};
-        let ast = sqlparser::parser::Parser::parse_sql(&dialect, query)?;
-        if ast.len() != 1 || !matches!(ast[0], sqlparser::ast::Statement::Insert { .. }) {
-            return Err(anyhow::anyhow!("Only INSERT statements are allowed"));
-        }
+        let query = validate_sql(
+            query,
+            |stmt| matches!(stmt, Statement::Insert { .. }),
+            "Only INSERT statements are allowed",
+        )?;
 
-        let result = sqlx::query(query).execute(&conn.pool).await?;
+        let result = sqlx::query(&query).execute(&conn.pool).await?;
 
         Ok(format!(
             "success, rows_affected: {}",
@@ -112,14 +111,13 @@ impl Conns {
             .get(id)
             .ok_or_else(|| anyhow::anyhow!("Connection not found"))?;
 
-        // Validate query is an UPDATE statement
-        let dialect = sqlparser::dialect::PostgreSqlDialect {};
-        let ast = sqlparser::parser::Parser::parse_sql(&dialect, query)?;
-        if ast.len() != 1 || !matches!(ast[0], sqlparser::ast::Statement::Update { .. }) {
-            return Err(anyhow::anyhow!("Only UPDATE statements are allowed"));
-        }
+        let query = validate_sql(
+            query,
+            |stmt| matches!(stmt, Statement::Update { .. }),
+            "Only UPDATE statements are allowed",
+        )?;
 
-        let result = sqlx::query(query).execute(&conn.pool).await?;
+        let result = sqlx::query(&query).execute(&conn.pool).await?;
 
         Ok(format!(
             "success, rows_affected: {}",
@@ -133,14 +131,13 @@ impl Conns {
             .get(id)
             .ok_or_else(|| anyhow::anyhow!("Connection not found"))?;
 
-        // Validate query is a DELETE statement
-        let dialect = sqlparser::dialect::PostgreSqlDialect {};
-        let ast = sqlparser::parser::Parser::parse_sql(&dialect, query)?;
-        if ast.len() != 1 || !matches!(ast[0], sqlparser::ast::Statement::Delete { .. }) {
-            return Err(anyhow::anyhow!("Only DELETE statements are allowed"));
-        }
+        let query = validate_sql(
+            query,
+            |stmt| matches!(stmt, Statement::Delete { .. }),
+            "Only DELETE statements are allowed",
+        )?;
 
-        let result = sqlx::query(query).execute(&conn.pool).await?;
+        let result = sqlx::query(&query).execute(&conn.pool).await?;
 
         Ok(format!(
             "success, rows_affected: {}",
@@ -154,14 +151,13 @@ impl Conns {
             .get(id)
             .ok_or_else(|| anyhow::anyhow!("Connection not found"))?;
 
-        // Validate query is a CREATE TABLE statement
-        let dialect = sqlparser::dialect::PostgreSqlDialect {};
-        let ast = sqlparser::parser::Parser::parse_sql(&dialect, query)?;
-        if ast.len() != 1 || !matches!(ast[0], sqlparser::ast::Statement::CreateTable { .. }) {
-            return Err(anyhow::anyhow!("Only CREATE TABLE statements are allowed"));
-        }
+        let query = validate_sql(
+            query,
+            |stmt| matches!(stmt, Statement::CreateTable { .. }),
+            "Only CREATE TABLE statements are allowed",
+        )?;
 
-        sqlx::query(query).execute(&conn.pool).await?;
+        sqlx::query(&query).execute(&conn.pool).await?;
 
         Ok("success".to_string())
     }
@@ -184,14 +180,13 @@ impl Conns {
             .get(id)
             .ok_or_else(|| anyhow::anyhow!("Connection not found"))?;
 
-        // Validate query is a CREATE INDEX statement
-        let dialect = sqlparser::dialect::PostgreSqlDialect {};
-        let ast = sqlparser::parser::Parser::parse_sql(&dialect, query)?;
-        if ast.len() != 1 || !matches!(ast[0], sqlparser::ast::Statement::CreateIndex { .. }) {
-            return Err(anyhow::anyhow!("Only CREATE INDEX statements are allowed"));
-        }
+        let query = validate_sql(
+            query,
+            |stmt| matches!(stmt, Statement::CreateIndex { .. }),
+            "Only CREATE INDEX statements are allowed",
+        )?;
 
-        sqlx::query(query).execute(&conn.pool).await?;
+        sqlx::query(&query).execute(&conn.pool).await?;
 
         Ok("success".to_string())
     }
@@ -262,6 +257,18 @@ impl Default for Conns {
     fn default() -> Self {
         Self::new()
     }
+}
+
+fn validate_sql<F>(query: &str, validator: F, error_msg: &'static str) -> Result<String, Error>
+where
+    F: Fn(&Statement) -> bool,
+{
+    let dialect = sqlparser::dialect::PostgreSqlDialect {};
+    let ast = sqlparser::parser::Parser::parse_sql(&dialect, query)?;
+    if ast.len() != 1 || !validator(&ast[0]) {
+        return Err(anyhow::anyhow!(error_msg));
+    }
+    Ok(ast[0].to_string())
 }
 
 #[cfg(test)]

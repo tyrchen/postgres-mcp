@@ -5,10 +5,7 @@ use rmcp::ServiceExt;
 async fn main() -> anyhow::Result<()> {
     // Initialize the tracing subscriber with file and stdout logging
     tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive(tracing::Level::INFO.into()),
-        )
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .with_writer(std::io::stderr)
         .with_ansi(true)
         .init();
