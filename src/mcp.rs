@@ -22,7 +22,9 @@ pub struct UnregisterRequest {
 pub struct QueryRequest {
     #[schemars(description = "Connection ID")]
     pub conn_id: String,
-    #[schemars(description = "SQL query")]
+    #[schemars(
+        description = "Single SQL query, could return multiple rows. Caller should properly limit the number of rows returned."
+    )]
     pub query: String,
 }
 
@@ -30,7 +32,9 @@ pub struct QueryRequest {
 pub struct InsertRequest {
     #[schemars(description = "Connection ID")]
     pub conn_id: String,
-    #[schemars(description = "SQL insert statement")]
+    #[schemars(
+        description = "Single SQL insert statement, but multiple rows for the same table are allowed"
+    )]
     pub query: String,
 }
 
@@ -38,7 +42,9 @@ pub struct InsertRequest {
 pub struct UpdateRequest {
     #[schemars(description = "Connection ID")]
     pub conn_id: String,
-    #[schemars(description = "SQL update statement")]
+    #[schemars(
+        description = "Single SQL update statement, could update multiple rows for the same table based on the WHERE clause"
+    )]
     pub query: String,
 }
 
@@ -46,7 +52,9 @@ pub struct UpdateRequest {
 pub struct DeleteRequest {
     #[schemars(description = "Connection ID")]
     pub conn_id: String,
-    #[schemars(description = "SQL delete statement")]
+    #[schemars(
+        description = "Single SQL delete statement, could delete multiple rows for the same table based on the WHERE clause"
+    )]
     pub query: String,
 }
 
@@ -54,7 +62,7 @@ pub struct DeleteRequest {
 pub struct CreateTableRequest {
     #[schemars(description = "Connection ID")]
     pub conn_id: String,
-    #[schemars(description = "SQL create table statement")]
+    #[schemars(description = "Single SQL create table statement")]
     pub query: String,
 }
 
@@ -62,7 +70,9 @@ pub struct CreateTableRequest {
 pub struct DropTableRequest {
     #[schemars(description = "Connection ID")]
     pub conn_id: String,
-    #[schemars(description = "Table name")]
+    #[schemars(
+        description = "Table name. Format: schema.table. If schema is not provided, it will use the current schema."
+    )]
     pub table: String,
 }
 
@@ -70,7 +80,7 @@ pub struct DropTableRequest {
 pub struct CreateIndexRequest {
     #[schemars(description = "Connection ID")]
     pub conn_id: String,
-    #[schemars(description = "SQL create index statement")]
+    #[schemars(description = "SingleSQL create index statement")]
     pub query: String,
 }
 
