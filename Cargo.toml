@@ -26,4 +26,5 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1.7", features = ["v4"] }
 
 [dev-dependencies]
+rmcp = { version = "0.1", features = ["client", "transport-child-process"] }
 sqlx-db-tester = "0.6"
