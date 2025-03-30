@@ -290,7 +290,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_connection_management() {
+    async fn register_unregister_should_work() {
         let (_tdb, conn_str) = setup_test_db().await;
         let conns = Conns::new();
 
@@ -304,7 +304,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_table_operations() {
+    async fn list_tables_describe_should_work() {
         let (_tdb, conn_str) = setup_test_db().await;
         let conns = Conns::new();
         let id = conns.register(conn_str).await.unwrap();
@@ -318,16 +318,33 @@ mod tests {
         assert!(description.contains("id"));
         assert!(description.contains("name"));
         assert!(description.contains("created_at"));
-
-        // Test drop table
-        assert_eq!(
-            conns.drop_table(&id, "test_table").await.unwrap(),
-            "success"
-        );
     }
 
     #[tokio::test]
-    async fn test_data_operations() {
+    async fn create_table_drop_table_should_work() {
+        let (_tdb, conn_str) = setup_test_db().await;
+        let conns = Conns::new();
+        let id = conns.register(conn_str).await.unwrap();
+
+        // Test create table
+        let create_table = "CREATE TABLE test_table2 (id SERIAL PRIMARY KEY, name TEXT)";
+        assert_eq!(
+            conns.create_table(&id, create_table).await.unwrap(),
+            "success"
+        );
+
+        // Test drop table
+        assert_eq!(
+            conns.drop_table(&id, "test_table2").await.unwrap(),
+            "success"
+        );
+
+        // Test drop table again
+        assert!(conns.drop_table(&id, "test_table2").await.is_err());
+    }
+
+    #[tokio::test]
+    async fn query_insert_update_delete_should_work() {
         let (_tdb, conn_str) = setup_test_db().await;
         let conns = Conns::new();
         let id = conns.register(conn_str).await.unwrap();
@@ -358,7 +375,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_index_operations() {
+    async fn create_index_drop_index_should_work() {
         let (_tdb, conn_str) = setup_test_db().await;
         let conns = Conns::new();
         let id = conns.register(conn_str).await.unwrap();
@@ -378,7 +395,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_sql_validation() {
+    async fn sql_validation_should_work() {
         let (_tdb, conn_str) = setup_test_db().await;
         let conns = Conns::new();
         let id = conns.register(conn_str).await.unwrap();
