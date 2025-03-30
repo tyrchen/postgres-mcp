@@ -140,7 +140,7 @@ impl Conns {
             return Err(anyhow::anyhow!("Only DELETE statements are allowed"));
         }
 
-        let result = sqlx::query(&query).execute(&conn.pool).await?;
+        let result = sqlx::query(query).execute(&conn.pool).await?;
 
         Ok(format!(
             "success, rows_affected: {}",
@@ -222,7 +222,7 @@ impl Conns {
           ORDER BY ordinal_position)
         SELECT JSON_AGG(data.*) as ret FROM data"#;
 
-        let ret = sqlx::query_as::<_, JsonRow>(&query)
+        let ret = sqlx::query_as::<_, JsonRow>(query)
             .bind(table)
             .fetch_one(&conn.pool)
             .await?;
@@ -255,6 +255,12 @@ impl Conns {
             .await?;
 
         Ok(serde_json::to_string(&ret.ret)?)
+    }
+}
+
+impl Default for Conns {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

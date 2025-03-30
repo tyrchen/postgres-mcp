@@ -264,3 +264,9 @@ impl ServerHandler for PgMcp {
         }
     }
 }
+
+impl Default for PgMcp {
+    fn default() -> Self {
+        Self::new()
+    }
+}
