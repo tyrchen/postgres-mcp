@@ -148,8 +148,8 @@ cargo build --release
 
 ## License
 
-[Add your license information here]
+MIT license. See [LICENSE.md](LICENSE.md) for details.
 
 ## Contributing
 
-[Add contribution guidelines here]
+Contributions are welcome! Please open an issue or submit a pull request.
