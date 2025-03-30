@@ -90,6 +90,8 @@ Drop an index on a table. We will generate the SQL statement and execute it agai
 ### Data structure
 
 ```rust
+
+#[derive(Debug, Clone)]
 struct Conn {
   id: String,
   conn_str: String,
@@ -97,38 +99,73 @@ struct Conn {
 }
 
 struct Conns {
-  inner: ArcSwap<Arc<HashMap<String, Conn>>>,
+  inner: Arc<ArcSwap<HashMap<String, Conn>>>,
 }
 
 impl Conns {
   fn new() -> Self {
-    Self { inner: HashMap::new() }
+    ...
   }
 
-  fn register(&self, id: String, conn_str: String) -> Result<(), Error> {
+  fn register(&self, id: String, conn_str: String) -> Result<String, Error> {
     let mut conns = self.inner.load();
-    let pool = PgPool::new(&conn_str);
-    let conn = Arc::new(Conn { id, conn_str, pool });
-    conns.insert(id, conn);
-    self.inner.store(Arc::new(conns));
-    Ok(())
+    // use arc_swap to update the inner map
+    ...
   }
 
   fn unregister(&self, id: String) -> Result<(), Error> {
     let mut conns = self.inner.load();
-    conns.remove(&id);
-    self.inner.store(Arc::new(conns));
-    Ok(())
+    // use arc_swap to update the inner map
+    ...
   }
 
   fn get(&self, id: String) -> Result<&Conn, Error> {
     let conns = self.inner.load();
-    conns.get(&id).ok_or(Error::ConnNotFound)
+    ...
   }
-  ...
+
+  // return the result as a json string
+  async fn query(&self, id: &str, query: &str) -> Result<String, Error> { ... }
+
+  // return "success, rows_affected: <rows_affected>" if success
+  async fn insert(&self, id: &str, query: &str) -> Result<String, Error> { ... }
+
+  // return "success, rows_affected: <rows_affected>" if success
+  async fn update(&self, id: &str, query: &str) -> Result<String, Error> { ... }
+
+  // return "success, rows_affected: <rows_affected>" if success
+  async fn delete(&self, id: &str, table: &str, pk: &str) -> Result<String, Error> { ... }
+
+  // return "success" if success
+  async fn create_table(&self, id: &str, query: &str) -> Result<String, Error> { ... }
+
+  // return "success" if success
+  async fn drop_table(&self, id: &str, table: &str) -> Result<String, Error> { ... }
+
+  // return "success" if success
+  async fn create_index(&self, id: &str, query: &str) -> Result<String, Error> { ... }
+
+  // return "success" if success
+  async fn drop_index(&self, id: &str, index: &str) -> Result<String, Error> { ... }
+
+  // return the result as a json string, table name is "schema.table" or "table" if public schema
+  async fn describe(&self, id: &str, table: &str) -> Result<String, Error> { ... }
+
+  // return the result as a json string
+  async fn list_tables(&self, id: &str) -> Result<String, Error> { ... }
+
 }
 
 ```
+
+### Folder structure
+
+src/
+├── main.rs: The main entry point of the server
+├── lib.rs: data structure and imports
+├── pg.rs: core postgres related logic, e.g. implementation of Conns
+├── mcp.rs: MCP server implementation
+└── utils.rs: utility functions if needed
 
 ### Dependencies
 
@@ -169,7 +206,7 @@ use tracing_subscriber::{self, EnvFilter};
 use rmcp::{
     ServerHandler, ServiceExt, transport::stdio
     model::{ServerCapabilities, ServerInfo},
-    schemars, tool,
+    schemars, tool, Error as McpError, model::{CallToolResult, Content, ServerCapabilities, ServerInfo},
 };
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -183,8 +220,8 @@ pub struct Calculator;
 #[tool(tool_box)]
 impl Calculator {
     #[tool(description = "Calculate the sum of two numbers")]
-    fn sum(&self, #[tool(aggr)] SumRequest { a, b }: SumRequest) -> String {
-        (a + b).to_string()
+    fn sum(&self, #[tool(aggr)] SumRequest { a, b }: SumRequest) -> Result<CallToolResult, McpError> {
+        Ok(CallToolResult::new(Content::Text((a + b).to_string())))
     }
 
     #[tool(description = "Calculate the sum of two numbers")]
