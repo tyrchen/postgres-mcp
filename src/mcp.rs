@@ -46,10 +46,8 @@ pub struct UpdateRequest {
 pub struct DeleteRequest {
     #[schemars(description = "Connection ID")]
     pub conn_id: String,
-    #[schemars(description = "Table name")]
-    pub table: String,
-    #[schemars(description = "Primary key value")]
-    pub pk: String,
+    #[schemars(description = "SQL delete statement")]
+    pub query: String,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -96,6 +94,8 @@ pub struct DescribeRequest {
 pub struct ListTablesRequest {
     #[schemars(description = "Connection ID")]
     pub conn_id: String,
+    #[schemars(description = "Schema name")]
+    pub schema: String,
 }
 
 #[tool(tool_box)]
@@ -166,7 +166,7 @@ impl PgMcp {
     async fn delete(&self, #[tool(aggr)] req: DeleteRequest) -> Result<CallToolResult, McpError> {
         let result = self
             .conns
-            .delete(&req.conn_id, &req.table, &req.pk)
+            .delete(&req.conn_id, &req.query)
             .await
             .map_err(|e| McpError::internal_error(e.to_string(), None))?;
         Ok(CallToolResult::success(vec![Content::text(result)]))
@@ -244,7 +244,7 @@ impl PgMcp {
     ) -> Result<CallToolResult, McpError> {
         let result = self
             .conns
-            .list_tables(&req.conn_id)
+            .list_tables(&req.conn_id, &req.schema)
             .await
             .map_err(|e| McpError::internal_error(e.to_string(), None))?;
         Ok(CallToolResult::success(vec![Content::text(result)]))
