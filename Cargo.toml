@@ -2,6 +2,15 @@
 name = "postgres-mcp"
 version = "0.2.0"
 edition = "2024"
+description = "A PostgreSQL MCP (Model Context Protocol) server implementation for building AI agents"
+license = "MIT"
+authors = ["Tyr Chen <tyr.chen@gmail.com>"]
+documentation = "https://docs.rs/postgres-mcp"
+repository = "https://github.com/tyrchen/postgres-mcp"
+homepage = "https://github.com/tyrchen/postgres-mcp"
+readme = "README.md"
+categories = ["development-tools"]
+keywords = ["postgres", "database", "mcp", "agent"]
 
 [dependencies]
 anyhow = "1.0"
