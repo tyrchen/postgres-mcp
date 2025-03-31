@@ -50,6 +50,8 @@ jobs:
         run: cargo check --all
       - name: Lint rust sources
         run: cargo clippy --all-targets --all-features --tests --benches -- -D warnings
+      - name: install postgres-mcp
+        run: cargo install --path . --debug
       - name: Execute rust tests
         run: cargo nextest run --all-features
       - name: Generate a changelog

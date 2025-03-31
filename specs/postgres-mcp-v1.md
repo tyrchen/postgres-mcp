@@ -41,12 +41,12 @@ pg_mcp insert 123e4567-e89b-12d3-a456-426614174000 "INSERT INTO users (name, ema
 
 Update a row in the database. It must be a valid "UPDATE" statement. We will use sqlparser to parse the statement, validate it is a valid "UPDATE" statement, and then generate the SQL statement again. The newly generated SQL statement will be executed against the database.
 
-### pg_mcp delete <conn_id> <table_name> <pk>
+### pg_mcp delete <conn_id> <query_sql>
 
-Delete a row in the database. We will generate the SQL statement and execute it against the database.
+Delete a row in the database. It must be a valid "DELETE" statement. We will use sqlparser to parse the statement, validate it is a valid "DELETE" statement, and then generate the SQL statement again. The newly generated SQL statement will be executed against the database.
 
 ```shell
-pg_mcp delete 123e4567-e89b-12d3-a456-426614174000 "users" "1"
+pg_mcp delete 123e4567-e89b-12d3-a456-426614174000 "DELETE FROM users WHERE id = 1"
 ```
 
 ### pg_mcp describe <conn_id> <table_name>
