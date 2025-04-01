@@ -4,7 +4,7 @@ Postgres MCP is a MCP (Model Context Protocol) implementation for Postgres. It a
 
 ## APIs
 
-### pg_mcp register <conn_str>
+### pg_mcp register <conn_str> ✅
 
 Register a new Postgres connection pool. AI agents can use this id to query the database.
 
@@ -13,7 +13,7 @@ pg_mcp register "postgres://postgres:postgres@localhost:5432/postgres"
 123e4567-e89b-12d3-a456-426614174000
 ```
 
-### pg_mcp unregister <conn_id>
+### pg_mcp unregister <conn_id> ✅
 
 Unregister a Postgres connection. The connection pool will be closed and the connection id can't be used again.
 
@@ -21,7 +21,7 @@ Unregister a Postgres connection. The connection pool will be closed and the con
 pg_mcp unregister 123e4567-e89b-12d3-a456-426614174000
 ```
 
-### pg_mcp query <conn_id> <query_sql>
+### pg_mcp query <conn_id> <query_sql> ✅
 
 Query the database with a SQL statement. It must be a valid "SELECT" statement. We will use sqlparser to parse the statement, validate it is a valid "SELECT" statement, and then generate the SQL statement again. The newly generated SQL statement will be executed against the database.
 
@@ -29,7 +29,7 @@ Query the database with a SQL statement. It must be a valid "SELECT" statement. 
 pg_mcp query 123e4567-e89b-12d3-a456-426614174000 "SELECT * FROM users"
 ```
 
-### pg_mcp insert <conn_id> <query_sql>
+### pg_mcp insert <conn_id> <query_sql> ✅
 
 Insert a new row into the database. It must be a valid "INSERT" statement. We will use sqlparser to parse the statement, validate it is a valid "INSERT" statement, and then generate the SQL statement again. The newly generated SQL statement will be executed against the database.
 
@@ -37,11 +37,11 @@ Insert a new row into the database. It must be a valid "INSERT" statement. We wi
 pg_mcp insert 123e4567-e89b-12d3-a456-426614174000 "INSERT INTO users (name, email) VALUES ('John Doe', 'john.doe@example.com')"
 ```
 
-### pg_mcp update <conn_id> <query_sql>
+### pg_mcp update <conn_id> <query_sql> ✅
 
 Update a row in the database. It must be a valid "UPDATE" statement. We will use sqlparser to parse the statement, validate it is a valid "UPDATE" statement, and then generate the SQL statement again. The newly generated SQL statement will be executed against the database.
 
-### pg_mcp delete <conn_id> <query_sql>
+### pg_mcp delete <conn_id> <query_sql> ✅
 
 Delete a row in the database. It must be a valid "DELETE" statement. We will use sqlparser to parse the statement, validate it is a valid "DELETE" statement, and then generate the SQL statement again. The newly generated SQL statement will be executed against the database.
 
@@ -49,7 +49,7 @@ Delete a row in the database. It must be a valid "DELETE" statement. We will use
 pg_mcp delete 123e4567-e89b-12d3-a456-426614174000 "DELETE FROM users WHERE id = 1"
 ```
 
-### pg_mcp describe <conn_id> <table_name>
+### pg_mcp describe <conn_id> <table_name> ✅
 
 Describe a table in the database. We will generate the SQL statement and execute it against the database.
 
@@ -57,23 +57,23 @@ Describe a table in the database. We will generate the SQL statement and execute
 pg_mcp describe 123e4567-e89b-12d3-a456-426614174000 "users"
 ```
 
-### pg_mcp create <conn_id> <create_sql>
+### pg_mcp create_table <conn_id> <create_sql> ✅
 
 Create a new table in the database. It must be a valid "CREATE TABLE" statement. We will use sqlparser to parse the statement, validate it is a valid "CREATE TABLE" statement, and then generate the SQL statement again. The newly generated SQL statement will be executed against the database.
 
 ```shell
-pg_mcp create 123e4567-e89b-12d3-a456-426614174000 "CREATE TABLE users (id SERIAL PRIMARY KEY, name VARCHAR(255), email VARCHAR(255))"
+pg_mcp create_table 123e4567-e89b-12d3-a456-426614174000 "CREATE TABLE users (id SERIAL PRIMARY KEY, name VARCHAR(255), email VARCHAR(255))"
 ```
 
-### pg_mcp drop <conn_id> <table_name>
+### pg_mcp drop_table <conn_id> <table_name> ✅
 
 Drop a table in the database. We will generate the SQL statement and execute it against the database.
 
 ```shell
-pg_mcp drop 123e4567-e89b-12d3-a456-426614174000 "users"
+pg_mcp drop_table 123e4567-e89b-12d3-a456-426614174000 "users"
 ```
 
-### pg_mcp create_index <conn_id> <create_index_sql>
+### pg_mcp create_index <conn_id> <create_index_sql> ✅
 
 Create an index on a table. It must be a valid "CREATE INDEX" statement. We will use sqlparser to parse the statement, validate it is a valid "CREATE INDEX" statement, and then generate the SQL statement again. The newly generated SQL statement will be executed against the database.
 
@@ -81,9 +81,17 @@ Create an index on a table. It must be a valid "CREATE INDEX" statement. We will
 pg_mcp create_index 123e4567-e89b-12d3-a456-426614174000 "CREATE INDEX idx_users_name ON users (name)"
 ```
 
-### pg_mcp drop_index <conn_id> <index_name>
+### pg_mcp drop_index <conn_id> <index_name> ✅
 
 Drop an index on a table. We will generate the SQL statement and execute it against the database.
+
+### pg_mcp list_tables <conn_id> <schema> ✅
+
+List all tables in a given schema. If schema is not provided, it will use the current schema.
+
+```shell
+pg_mcp list_tables 123e4567-e89b-12d3-a456-426614174000 "public"
+```
 
 ## Implementations
 
