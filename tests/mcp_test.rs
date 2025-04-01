@@ -263,3 +263,72 @@ async fn test_index_operations() -> Result<()> {
     cleanup_service(service, &conn_id).await?;
     Ok(())
 }
+
+#[tokio::test]
+async fn test_type_operations() -> Result<()> {
+    let test_service = setup_service().await?;
+    let service = test_service.service;
+    let conn_id = test_service.conn_id;
+
+    // Create enum type
+    let create_type_result = service
+        .call_tool(CallToolRequestParam {
+            name: "create_type".into(),
+            arguments: Some(object!({
+                "conn_id": conn_id.as_str(),
+                "query": "CREATE TYPE user_role AS ENUM ('admin', 'user', 'guest')"
+            })),
+        })
+        .await?;
+    assert!(!create_type_result.content.is_empty());
+
+    // Create a table using the new type
+    let create_table_result = service
+        .call_tool(CallToolRequestParam {
+            name: "create_table".into(),
+            arguments: Some(object!({
+                "conn_id": conn_id.as_str(),
+                "query": "CREATE TABLE test_users (id SERIAL PRIMARY KEY, name TEXT NOT NULL, role user_role NOT NULL)"
+            })),
+        })
+        .await?;
+    assert!(!create_table_result.content.is_empty());
+
+    // Insert data using the enum type
+    let insert_result = service
+        .call_tool(CallToolRequestParam {
+            name: "insert".into(),
+            arguments: Some(object!({
+                "conn_id": conn_id.as_str(),
+                "query": "INSERT INTO test_users (name, role) VALUES ('Test Admin', 'admin'), ('Test User', 'user'), ('Test Guest', 'guest')"
+            })),
+        })
+        .await?;
+    assert!(!insert_result.content.is_empty());
+
+    // Query data to verify enum type works
+    let query_result = service
+        .call_tool(CallToolRequestParam {
+            name: "query".into(),
+            arguments: Some(object!({
+                "conn_id": conn_id.as_str(),
+                "query": "SELECT * FROM test_users WHERE role = 'admin'"
+            })),
+        })
+        .await?;
+    assert!(!query_result.content.is_empty());
+
+    // Drop the test table
+    service
+        .call_tool(CallToolRequestParam {
+            name: "drop_table".into(),
+            arguments: Some(object!({
+                "conn_id": conn_id.as_str(),
+                "table": "test_users"
+            })),
+        })
+        .await?;
+
+    cleanup_service(service, &conn_id).await?;
+    Ok(())
+}

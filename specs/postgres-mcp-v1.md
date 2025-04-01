@@ -93,6 +93,14 @@ List all tables in a given schema. If schema is not provided, it will use the cu
 pg_mcp list_tables 123e4567-e89b-12d3-a456-426614174000 "public"
 ```
 
+### pg_mcp create_type <conn_id> <create_type_sql>
+
+Create a new type in the database. It must be a valid "CREATE TYPE" statement. We will use sqlparser to parse the statement, validate it is a valid "CREATE TYPE" statement, and then generate the SQL statement again. The newly generated SQL statement will be executed against the database.
+
+```shell
+pg_mcp create_type 123e4567-e89b-12d3-a456-426614174000 "CREATE TYPE users AS ENUM ('admin', 'user')"
+```
+
 ## Implementations
 
 ### Data structure

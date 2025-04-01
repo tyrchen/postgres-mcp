@@ -251,6 +251,23 @@ impl Conns {
 
         Ok(serde_json::to_string(&ret.ret)?)
     }
+
+    pub(crate) async fn create_type(&self, id: &str, query: &str) -> Result<String, Error> {
+        let conns = self.inner.load();
+        let conn = conns
+            .get(id)
+            .ok_or_else(|| anyhow::anyhow!("Connection not found"))?;
+
+        let query = validate_sql(
+            query,
+            |stmt| matches!(stmt, Statement::CreateType { .. }),
+            "Only CREATE TYPE statements are allowed",
+        )?;
+
+        sqlx::query(&query).execute(&conn.pool).await?;
+
+        Ok("success".to_string())
+    }
 }
 
 impl Default for Conns {
@@ -426,5 +443,23 @@ mod tests {
         // Test invalid CREATE INDEX
         let invalid_index = "CREATE TABLE test (id INT)";
         assert!(conns.create_index(&id, invalid_index).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn create_type_should_work() {
+        let (_tdb, conn_str) = setup_test_db().await;
+        let conns = Conns::new();
+        let id = conns.register(conn_str).await.unwrap();
+
+        // Test create type
+        let create_type = "CREATE TYPE user_role AS ENUM ('admin', 'user')";
+        assert_eq!(
+            conns.create_type(&id, create_type).await.unwrap(),
+            "success"
+        );
+
+        // Test invalid type creation
+        let invalid_type = "CREATE TABLE test (id INT)";
+        assert!(conns.create_type(&id, invalid_type).await.is_err());
     }
 }
