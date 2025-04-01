@@ -109,6 +109,14 @@ pub struct ListTablesRequest {
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct CreateSchemaRequest {
+    #[schemars(description = "Connection ID")]
+    pub conn_id: String,
+    #[schemars(description = "Schema name")]
+    pub name: String,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 pub struct CreateTypeRequest {
     #[schemars(description = "Connection ID")]
     pub conn_id: String,
@@ -263,6 +271,19 @@ impl PgMcp {
         let result = self
             .conns
             .list_tables(&req.conn_id, &req.schema)
+            .await
+            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+        Ok(CallToolResult::success(vec![Content::text(result)]))
+    }
+
+    #[tool(description = "Create a new schema")]
+    async fn create_schema(
+        &self,
+        #[tool(aggr)] req: CreateSchemaRequest,
+    ) -> Result<CallToolResult, McpError> {
+        let result = self
+            .conns
+            .create_schema(&req.conn_id, &req.name)
             .await
             .map_err(|e| McpError::internal_error(e.to_string(), None))?;
         Ok(CallToolResult::success(vec![Content::text(result)]))

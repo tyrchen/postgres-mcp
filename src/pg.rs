@@ -252,6 +252,24 @@ impl Conns {
         Ok(serde_json::to_string(&ret.ret)?)
     }
 
+    pub(crate) async fn create_schema(&self, id: &str, schema_name: &str) -> Result<String, Error> {
+        let conns = self.inner.load();
+        let conn = conns
+            .get(id)
+            .ok_or_else(|| anyhow::anyhow!("Connection not found"))?;
+
+        // Basic validation for schema name to prevent obvious SQL injection
+        // A more robust validation might be needed depending on security requirements
+        if !schema_name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+            return Err(anyhow::anyhow!("Invalid schema name"));
+        }
+
+        let query = format!("CREATE SCHEMA \"{}\";", schema_name);
+        sqlx::query(&query).execute(&conn.pool).await?;
+
+        Ok("success".to_string())
+    }
+
     pub(crate) async fn create_type(&self, id: &str, query: &str) -> Result<String, Error> {
         let conns = self.inner.load();
         let conn = conns
@@ -461,5 +479,33 @@ mod tests {
         // Test invalid type creation
         let invalid_type = "CREATE TABLE test (id INT)";
         assert!(conns.create_type(&id, invalid_type).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn create_schema_should_work() {
+        let (_tdb, conn_str) = setup_test_db().await;
+        let conns = Conns::new();
+        let id = conns.register(conn_str).await.unwrap();
+
+        // Test create schema with valid name
+        let schema_name = "test_schema_unit";
+        assert_eq!(
+            conns.create_schema(&id, schema_name).await.unwrap(),
+            "success"
+        );
+
+        // Verify schema exists using a query
+        let query = format!(
+            "SELECT schema_name FROM information_schema.schemata WHERE schema_name = '{}'",
+            schema_name
+        );
+        let _result = sqlx::query(&query)
+            .fetch_one(&conns.inner.load().get(&id).unwrap().pool)
+            .await
+            .unwrap();
+
+        // Test create schema with invalid name
+        let invalid_schema_name = "test;schema";
+        assert!(conns.create_schema(&id, invalid_schema_name).await.is_err());
     }
 }

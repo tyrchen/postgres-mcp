@@ -101,6 +101,14 @@ Create a new type in the database. It must be a valid "CREATE TYPE" statement. W
 pg_mcp create_type 123e4567-e89b-12d3-a456-426614174000 "CREATE TYPE users AS ENUM ('admin', 'user')"
 ```
 
+### pg_mcp create_schema <conn_id> <schema_name> ✅
+
+Create a new schema in the database. We will generate the SQL statement and execute it against the database.
+
+```shell
+pg_mcp create_schema 123e4567-e89b-12d3-a456-426614174000 "hr"
+```
+
 ## Implementations
 
 ### Data structure
