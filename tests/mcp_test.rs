@@ -340,13 +340,13 @@ async fn test_schema_operations() -> Result<()> {
     let conn_id = test_service.conn_id;
 
     // Create a test schema
-    let schema_name = "test_schema_ops";
+    let name = "test_schema_ops";
     let create_result = service
         .call_tool(CallToolRequestParam {
             name: "create_schema".into(),
             arguments: Some(object!({
                 "conn_id": conn_id.as_str(),
-                "schema_name": schema_name
+                "name": name
             })),
         })
         .await?;
