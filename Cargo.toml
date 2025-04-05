@@ -1,6 +1,6 @@
 [package]
 name = "postgres-mcp"
-version = "0.2.2"
+version = "0.3.0"
 edition = "2024"
 description = "A PostgreSQL MCP (Model Context Protocol) server implementation for building AI agents"
 license = "MIT"
@@ -13,14 +13,14 @@ categories = ["development-tools"]
 keywords = ["postgres", "database", "mcp", "agent"]
 
 [dependencies]
-anyhow = "1.0"
+anyhow = "1.0.86"
 arc-swap = "1.7"
 sqlx = { version = "0.8", features = [
   "runtime-tokio",
   "runtime-tokio-rustls",
   "postgres",
 ] }
-rmcp = { version = "0.1", features = [
+rmcp = { git = "https://github.com/modelcontextprotocol/rust-sdk", features = [
   "server",
   "transport-sse-server",
   "transport-io",
@@ -33,7 +33,14 @@ serde_json = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1.16", features = ["v4"] }
+clap = { version = "4.5.9", features = ["derive"] }
+axum = { version = "0.8", features = ["macros"] }
+tokio-stream = "0.1"
+tokio-util = { version = "0.7", features = ["codec"] }
 
 [dev-dependencies]
-rmcp = { version = "0.1", features = ["client", "transport-child-process"] }
+rmcp = { git = "https://github.com/modelcontextprotocol/rust-sdk", features = [
+  "client",
+  "transport-child-process",
+] }
 sqlx-db-tester = "0.6"

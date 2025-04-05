@@ -25,6 +25,7 @@ async fn setup_service() -> Result<TestService> {
     let url = tdb.url();
 
     let mut cmd = Command::new("postgres-mcp");
+    cmd.arg("stdio");
     let service = ().serve(TokioChildProcess::new(&mut cmd)?).await?;
 
     // Register a test connection

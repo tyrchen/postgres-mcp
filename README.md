@@ -40,7 +40,28 @@ Add the following to your MCP configuration file:
 {
   "mcpServers": {
     "postgres": {
-      "command": "postgres-mcp"
+      "command": "postgres-mcp",
+      "args": ["stdio"]
+    }
+  }
+}
+```
+
+or run it in SSE mode:
+
+First, start the `postgres-mcp` server in SSE mode:
+
+```bash
+postgres-mcp sse
+```
+
+Then, configure the MCP config file to use the SSE mode:
+
+```json
+{
+  "mcpServers": {
+    "postgres": {
+      "url": "http://localhost:3000"
     }
   }
 }
