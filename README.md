@@ -61,7 +61,7 @@ Then, configure the MCP config file to use the SSE mode:
 {
   "mcpServers": {
     "postgres": {
-      "url": "http://localhost:3000"
+      "url": "http://localhost:3000/sse"
     }
   }
 }

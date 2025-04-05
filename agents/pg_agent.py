@@ -17,7 +17,7 @@ class PostgresMCPServer(MCPServerStdio):
             name="PostgreSQL MCP Server",
             params={
                 "command": postgres_mcp_path,
-                "args": [],
+                "args": ["stdio"],
             },
         )
 

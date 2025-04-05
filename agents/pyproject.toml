@@ -4,6 +4,4 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = [
-    "openai-agents>=0.0.7",
-]
+dependencies = ["aiohttp>=3.11.16", "openai-agents>=0.0.7"]
