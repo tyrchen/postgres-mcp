@@ -1,3 +1,4 @@
+use crate::pg::PgMcpError;
 use crate::{Conns, PgMcp};
 use anyhow::Result;
 use rmcp::{
@@ -124,6 +125,43 @@ pub struct CreateTypeRequest {
     pub query: String,
 }
 
+// Helper function to map PgMcpError to McpError
+fn map_pg_error(e: PgMcpError) -> McpError {
+    match e {
+        PgMcpError::ConnectionNotFound(id) => McpError::internal_error(
+            format!("Invalid Argument: Connection not found for ID: {}", id),
+            None,
+        ),
+        PgMcpError::ValidationFailed {
+            kind,
+            query,
+            details,
+        } => McpError::internal_error(
+            format!(
+                "Invalid Argument: SQL validation failed for query '{}': {} - {}",
+                query, kind, details
+            ),
+            None,
+        ),
+        PgMcpError::DatabaseError {
+            operation,
+            underlying,
+        } => McpError::internal_error(
+            format!("Database operation '{}' failed: {}", operation, underlying),
+            None,
+        ),
+        PgMcpError::SerializationError(se) => {
+            McpError::internal_error(format!("Result serialization failed: {}", se), None)
+        }
+        PgMcpError::ConnectionError(ce) => {
+            McpError::internal_error(format!("Database connection failed: {}", ce), None)
+        }
+        PgMcpError::InternalError(ie) => {
+            McpError::internal_error(format!("Internal error: {}", ie), None)
+        }
+    }
+}
+
 #[tool(tool_box)]
 impl PgMcp {
     pub fn new() -> Self {
@@ -141,7 +179,7 @@ impl PgMcp {
             .conns
             .register(req.conn_str)
             .await
-            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+            .map_err(map_pg_error)?;
         Ok(CallToolResult::success(vec![Content::text(id)]))
     }
 
@@ -150,9 +188,7 @@ impl PgMcp {
         &self,
         #[tool(aggr)] req: UnregisterRequest,
     ) -> Result<CallToolResult, McpError> {
-        self.conns
-            .unregister(req.conn_id)
-            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+        self.conns.unregister(req.conn_id).map_err(map_pg_error)?;
         Ok(CallToolResult::success(vec![Content::text(
             "success".to_string(),
         )]))
@@ -164,7 +200,7 @@ impl PgMcp {
             .conns
             .query(&req.conn_id, &req.query)
             .await
-            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+            .map_err(map_pg_error)?;
         Ok(CallToolResult::success(vec![Content::text(result)]))
     }
 
@@ -174,7 +210,7 @@ impl PgMcp {
             .conns
             .insert(&req.conn_id, &req.query)
             .await
-            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+            .map_err(map_pg_error)?;
         Ok(CallToolResult::success(vec![Content::text(result)]))
     }
 
@@ -184,7 +220,7 @@ impl PgMcp {
             .conns
             .update(&req.conn_id, &req.query)
             .await
-            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+            .map_err(map_pg_error)?;
         Ok(CallToolResult::success(vec![Content::text(result)]))
     }
 
@@ -194,7 +230,7 @@ impl PgMcp {
             .conns
             .delete(&req.conn_id, &req.query)
             .await
-            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+            .map_err(map_pg_error)?;
         Ok(CallToolResult::success(vec![Content::text(result)]))
     }
 
@@ -207,7 +243,7 @@ impl PgMcp {
             .conns
             .create_table(&req.conn_id, &req.query)
             .await
-            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+            .map_err(map_pg_error)?;
         Ok(CallToolResult::success(vec![Content::text(result)]))
     }
 
@@ -220,7 +256,7 @@ impl PgMcp {
             .conns
             .drop_table(&req.conn_id, &req.table)
             .await
-            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+            .map_err(map_pg_error)?;
         Ok(CallToolResult::success(vec![Content::text(result)]))
     }
 
@@ -233,7 +269,7 @@ impl PgMcp {
             .conns
             .create_index(&req.conn_id, &req.query)
             .await
-            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+            .map_err(map_pg_error)?;
         Ok(CallToolResult::success(vec![Content::text(result)]))
     }
 
@@ -246,7 +282,7 @@ impl PgMcp {
             .conns
             .drop_index(&req.conn_id, &req.index)
             .await
-            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+            .map_err(map_pg_error)?;
         Ok(CallToolResult::success(vec![Content::text(result)]))
     }
 
@@ -259,11 +295,11 @@ impl PgMcp {
             .conns
             .describe(&req.conn_id, &req.table)
             .await
-            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+            .map_err(map_pg_error)?;
         Ok(CallToolResult::success(vec![Content::text(result)]))
     }
 
-    #[tool(description = "List all tables")]
+    #[tool(description = "List tables in a schema")]
     async fn list_tables(
         &self,
         #[tool(aggr)] req: ListTablesRequest,
@@ -272,7 +308,7 @@ impl PgMcp {
             .conns
             .list_tables(&req.conn_id, &req.schema)
             .await
-            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+            .map_err(map_pg_error)?;
         Ok(CallToolResult::success(vec![Content::text(result)]))
     }
 
@@ -285,7 +321,7 @@ impl PgMcp {
             .conns
             .create_schema(&req.conn_id, &req.name)
             .await
-            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+            .map_err(map_pg_error)?;
         Ok(CallToolResult::success(vec![Content::text(result)]))
     }
 
@@ -298,7 +334,7 @@ impl PgMcp {
             .conns
             .create_type(&req.conn_id, &req.query)
             .await
-            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+            .map_err(map_pg_error)?;
         Ok(CallToolResult::success(vec![Content::text(result)]))
     }
 }

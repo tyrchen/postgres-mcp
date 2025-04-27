@@ -1,10 +1,66 @@
-use anyhow::Error;
 use arc_swap::ArcSwap;
 use serde::{Deserialize, Serialize};
 use sqlparser::ast::Statement;
 use sqlx::postgres::PgPool;
 use std::collections::HashMap;
 use std::sync::Arc;
+use thiserror::Error;
+
+#[allow(unused)]
+#[derive(Error, Debug)]
+pub enum PgMcpError {
+    #[error("Connection not found for ID: {0}")]
+    ConnectionNotFound(String),
+
+    #[error("SQL validation failed for query '{query}': {kind}")]
+    ValidationFailed {
+        kind: ValidationErrorKind,
+        query: String,
+        details: String,
+    },
+
+    #[error("Database operation '{operation}' failed: {underlying}")]
+    DatabaseError {
+        operation: String,
+        underlying: String,
+    },
+
+    #[error("Serialization failed: {0}")]
+    SerializationError(#[from] serde_json::Error),
+
+    #[error("Database connection failed: {0}")]
+    ConnectionError(String),
+
+    #[error("Internal error: {0}")]
+    InternalError(String),
+}
+
+#[derive(Error, Debug)]
+pub enum ValidationErrorKind {
+    #[error("Invalid statement type, expected {expected}")]
+    InvalidStatementType { expected: String },
+    #[error("Failed to parse SQL")]
+    ParseError,
+}
+
+impl From<sqlx::Error> for PgMcpError {
+    fn from(e: sqlx::Error) -> Self {
+        let msg = e.to_string();
+        if let Some(db_err) = e.as_database_error() {
+            PgMcpError::DatabaseError {
+                operation: "unknown".to_string(),
+                underlying: db_err.to_string(),
+            }
+        } else if msg.contains("error connecting") || msg.contains("timed out") {
+            PgMcpError::ConnectionError(msg)
+        } else {
+            PgMcpError::DatabaseError {
+                operation: "unknown".to_string(),
+                underlying: msg,
+            }
+        }
+    }
+}
 
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
@@ -36,8 +92,10 @@ impl Conns {
         }
     }
 
-    pub(crate) async fn register(&self, conn_str: String) -> Result<String, Error> {
-        let pool = PgPool::connect(&conn_str).await?;
+    pub(crate) async fn register(&self, conn_str: String) -> Result<String, PgMcpError> {
+        let pool = PgPool::connect(&conn_str)
+            .await
+            .map_err(|e| PgMcpError::ConnectionError(e.to_string()))?;
         let id = uuid::Uuid::new_v4().to_string();
         let conn = Conn {
             id: id.clone(),
@@ -52,52 +110,61 @@ impl Conns {
         Ok(id)
     }
 
-    pub(crate) fn unregister(&self, id: String) -> Result<(), Error> {
+    pub(crate) fn unregister(&self, id: String) -> Result<(), PgMcpError> {
         let mut conns = self.inner.load().as_ref().clone();
         if conns.remove(&id).is_none() {
-            return Err(anyhow::anyhow!("Connection not found"));
+            return Err(PgMcpError::ConnectionNotFound(id));
         }
         self.inner.store(Arc::new(conns));
         Ok(())
     }
 
-    pub(crate) async fn query(&self, id: &str, query: &str) -> Result<String, Error> {
+    pub(crate) async fn query(&self, id: &str, query: &str) -> Result<String, PgMcpError> {
+        let operation = "query (SELECT)";
         let conns = self.inner.load();
         let conn = conns
             .get(id)
-            .ok_or_else(|| anyhow::anyhow!("Connection not found"))?;
+            .ok_or_else(|| PgMcpError::ConnectionNotFound(id.to_string()))?;
 
-        let query = validate_sql(
-            query,
-            |stmt| matches!(stmt, Statement::Query(_)),
-            "Only SELECT queries are allowed",
-        )?;
+        let validated_query =
+            validate_sql(query, |stmt| matches!(stmt, Statement::Query(_)), "SELECT")?;
 
-        let query = format!(
+        let prepared_query = format!(
             "WITH data AS ({}) SELECT JSON_AGG(data.*) as ret FROM data;",
-            query
+            validated_query
         );
 
-        let ret = sqlx::query_as::<_, JsonRow>(&query)
+        let ret = sqlx::query_as::<_, JsonRow>(&prepared_query)
             .fetch_one(&conn.pool)
-            .await?;
+            .await
+            .map_err(|e| PgMcpError::DatabaseError {
+                operation: operation.to_string(),
+                underlying: e.to_string(),
+            })?;
 
         Ok(serde_json::to_string(&ret.ret)?)
     }
 
-    pub(crate) async fn insert(&self, id: &str, query: &str) -> Result<String, Error> {
+    pub(crate) async fn insert(&self, id: &str, query: &str) -> Result<String, PgMcpError> {
+        let operation = "insert (INSERT)";
         let conns = self.inner.load();
         let conn = conns
             .get(id)
-            .ok_or_else(|| anyhow::anyhow!("Connection not found"))?;
+            .ok_or_else(|| PgMcpError::ConnectionNotFound(id.to_string()))?;
 
-        let query = validate_sql(
+        let validated_query = validate_sql(
             query,
             |stmt| matches!(stmt, Statement::Insert { .. }),
-            "Only INSERT statements are allowed",
+            "INSERT",
         )?;
 
-        let result = sqlx::query(&query).execute(&conn.pool).await?;
+        let result = sqlx::query(&validated_query)
+            .execute(&conn.pool)
+            .await
+            .map_err(|e| PgMcpError::DatabaseError {
+                operation: operation.to_string(),
+                underlying: e.to_string(),
+            })?;
 
         Ok(format!(
             "success, rows_affected: {}",
@@ -105,19 +172,26 @@ impl Conns {
         ))
     }
 
-    pub(crate) async fn update(&self, id: &str, query: &str) -> Result<String, Error> {
+    pub(crate) async fn update(&self, id: &str, query: &str) -> Result<String, PgMcpError> {
+        let operation = "update (UPDATE)";
         let conns = self.inner.load();
         let conn = conns
             .get(id)
-            .ok_or_else(|| anyhow::anyhow!("Connection not found"))?;
+            .ok_or_else(|| PgMcpError::ConnectionNotFound(id.to_string()))?;
 
-        let query = validate_sql(
+        let validated_query = validate_sql(
             query,
             |stmt| matches!(stmt, Statement::Update { .. }),
-            "Only UPDATE statements are allowed",
+            "UPDATE",
         )?;
 
-        let result = sqlx::query(&query).execute(&conn.pool).await?;
+        let result = sqlx::query(&validated_query)
+            .execute(&conn.pool)
+            .await
+            .map_err(|e| PgMcpError::DatabaseError {
+                operation: operation.to_string(),
+                underlying: e.to_string(),
+            })?;
 
         Ok(format!(
             "success, rows_affected: {}",
@@ -125,19 +199,26 @@ impl Conns {
         ))
     }
 
-    pub(crate) async fn delete(&self, id: &str, query: &str) -> Result<String, Error> {
+    pub(crate) async fn delete(&self, id: &str, query: &str) -> Result<String, PgMcpError> {
+        let operation = "delete (DELETE)";
         let conns = self.inner.load();
         let conn = conns
             .get(id)
-            .ok_or_else(|| anyhow::anyhow!("Connection not found"))?;
+            .ok_or_else(|| PgMcpError::ConnectionNotFound(id.to_string()))?;
 
-        let query = validate_sql(
+        let validated_query = validate_sql(
             query,
             |stmt| matches!(stmt, Statement::Delete { .. }),
-            "Only DELETE statements are allowed",
+            "DELETE",
         )?;
 
-        let result = sqlx::query(&query).execute(&conn.pool).await?;
+        let result = sqlx::query(&validated_query)
+            .execute(&conn.pool)
+            .await
+            .map_err(|e| PgMcpError::DatabaseError {
+                operation: operation.to_string(),
+                underlying: e.to_string(),
+            })?;
 
         Ok(format!(
             "success, rows_affected: {}",
@@ -145,69 +226,98 @@ impl Conns {
         ))
     }
 
-    pub(crate) async fn create_table(&self, id: &str, query: &str) -> Result<String, Error> {
+    pub(crate) async fn create_table(&self, id: &str, query: &str) -> Result<String, PgMcpError> {
+        let operation = "create_table (CREATE TABLE)";
         let conns = self.inner.load();
         let conn = conns
             .get(id)
-            .ok_or_else(|| anyhow::anyhow!("Connection not found"))?;
+            .ok_or_else(|| PgMcpError::ConnectionNotFound(id.to_string()))?;
 
-        let query = validate_sql(
+        let validated_query = validate_sql(
             query,
             |stmt| matches!(stmt, Statement::CreateTable { .. }),
-            "Only CREATE TABLE statements are allowed",
+            "CREATE TABLE",
         )?;
 
-        sqlx::query(&query).execute(&conn.pool).await?;
+        sqlx::query(&validated_query)
+            .execute(&conn.pool)
+            .await
+            .map_err(|e| PgMcpError::DatabaseError {
+                operation: operation.to_string(),
+                underlying: e.to_string(),
+            })?;
 
         Ok("success".to_string())
     }
 
-    pub(crate) async fn drop_table(&self, id: &str, table: &str) -> Result<String, Error> {
+    pub(crate) async fn drop_table(&self, id: &str, table: &str) -> Result<String, PgMcpError> {
+        let operation = format!("drop_table (DROP TABLE {})", table);
         let conns = self.inner.load();
         let conn = conns
             .get(id)
-            .ok_or_else(|| anyhow::anyhow!("Connection not found"))?;
+            .ok_or_else(|| PgMcpError::ConnectionNotFound(id.to_string()))?;
 
         let query = format!("DROP TABLE {}", table);
-        sqlx::query(&query).execute(&conn.pool).await?;
+        sqlx::query(&query)
+            .execute(&conn.pool)
+            .await
+            .map_err(|e| PgMcpError::DatabaseError {
+                operation,
+                underlying: e.to_string(),
+            })?;
 
         Ok("success".to_string())
     }
 
-    pub(crate) async fn create_index(&self, id: &str, query: &str) -> Result<String, Error> {
+    pub(crate) async fn create_index(&self, id: &str, query: &str) -> Result<String, PgMcpError> {
+        let operation = "create_index (CREATE INDEX)";
         let conns = self.inner.load();
         let conn = conns
             .get(id)
-            .ok_or_else(|| anyhow::anyhow!("Connection not found"))?;
+            .ok_or_else(|| PgMcpError::ConnectionNotFound(id.to_string()))?;
 
-        let query = validate_sql(
+        let validated_query = validate_sql(
             query,
             |stmt| matches!(stmt, Statement::CreateIndex { .. }),
-            "Only CREATE INDEX statements are allowed",
+            "CREATE INDEX",
         )?;
 
-        sqlx::query(&query).execute(&conn.pool).await?;
+        sqlx::query(&validated_query)
+            .execute(&conn.pool)
+            .await
+            .map_err(|e| PgMcpError::DatabaseError {
+                operation: operation.to_string(),
+                underlying: e.to_string(),
+            })?;
 
         Ok("success".to_string())
     }
 
-    pub(crate) async fn drop_index(&self, id: &str, index: &str) -> Result<String, Error> {
+    pub(crate) async fn drop_index(&self, id: &str, index: &str) -> Result<String, PgMcpError> {
+        let operation = format!("drop_index (DROP INDEX {})", index);
         let conns = self.inner.load();
         let conn = conns
             .get(id)
-            .ok_or_else(|| anyhow::anyhow!("Connection not found"))?;
+            .ok_or_else(|| PgMcpError::ConnectionNotFound(id.to_string()))?;
 
         let query = format!("DROP INDEX {}", index);
-        sqlx::query(&query).execute(&conn.pool).await?;
+        sqlx::query(&query)
+            .execute(&conn.pool)
+            .await
+            .map_err(|e| PgMcpError::DatabaseError {
+                operation,
+                underlying: e.to_string(),
+            })?;
 
         Ok("success".to_string())
     }
 
-    pub(crate) async fn describe(&self, id: &str, table: &str) -> Result<String, Error> {
+    pub(crate) async fn describe(&self, id: &str, table: &str) -> Result<String, PgMcpError> {
+        let operation = format!("describe (table: {})", table);
         let conns = self.inner.load();
         let conn = conns
             .get(id)
-            .ok_or_else(|| anyhow::anyhow!("Connection not found"))?;
+            .ok_or_else(|| PgMcpError::ConnectionNotFound(id.to_string()))?;
 
         let query = r#"
         WITH data AS (
@@ -220,16 +330,21 @@ impl Conns {
         let ret = sqlx::query_as::<_, JsonRow>(query)
             .bind(table)
             .fetch_one(&conn.pool)
-            .await?;
+            .await
+            .map_err(|e| PgMcpError::DatabaseError {
+                operation: operation.to_string(),
+                underlying: e.to_string(),
+            })?;
 
         Ok(serde_json::to_string(&ret.ret)?)
     }
 
-    pub(crate) async fn list_tables(&self, id: &str, schema: &str) -> Result<String, Error> {
+    pub(crate) async fn list_tables(&self, id: &str, schema: &str) -> Result<String, PgMcpError> {
+        let operation = format!("list_tables (schema: {})", schema);
         let conns = self.inner.load();
         let conn = conns
             .get(id)
-            .ok_or_else(|| anyhow::anyhow!("Connection not found"))?;
+            .ok_or_else(|| PgMcpError::ConnectionNotFound(id.to_string()))?;
 
         let query = r#"
         WITH data AS (
@@ -247,42 +362,66 @@ impl Conns {
         let ret = sqlx::query_as::<_, JsonRow>(query)
             .bind(schema)
             .fetch_one(&conn.pool)
-            .await?;
+            .await
+            .or_else(|e| {
+                if let sqlx::Error::RowNotFound = e {
+                    Ok(JsonRow {
+                        ret: sqlx::types::Json(serde_json::json!([])),
+                    })
+                } else {
+                    Err(PgMcpError::DatabaseError {
+                        operation: operation.to_string(),
+                        underlying: e.to_string(),
+                    })
+                }
+            })?;
 
         Ok(serde_json::to_string(&ret.ret)?)
     }
 
-    pub(crate) async fn create_schema(&self, id: &str, schema_name: &str) -> Result<String, Error> {
+    pub(crate) async fn create_schema(
+        &self,
+        id: &str,
+        schema_name: &str,
+    ) -> Result<String, PgMcpError> {
+        let operation = format!("create_schema (CREATE SCHEMA {})", schema_name);
         let conns = self.inner.load();
         let conn = conns
             .get(id)
-            .ok_or_else(|| anyhow::anyhow!("Connection not found"))?;
+            .ok_or_else(|| PgMcpError::ConnectionNotFound(id.to_string()))?;
 
-        // Basic validation for schema name to prevent obvious SQL injection
-        // A more robust validation might be needed depending on security requirements
-        if !schema_name.chars().all(|c| c.is_alphanumeric() || c == '_') {
-            return Err(anyhow::anyhow!("Invalid schema name"));
-        }
-
-        let query = format!("CREATE SCHEMA \"{}\";", schema_name);
-        sqlx::query(&query).execute(&conn.pool).await?;
+        let query = format!("CREATE SCHEMA {}", schema_name);
+        sqlx::query(&query)
+            .execute(&conn.pool)
+            .await
+            .map_err(|e| PgMcpError::DatabaseError {
+                operation,
+                underlying: e.to_string(),
+            })?;
 
         Ok("success".to_string())
     }
 
-    pub(crate) async fn create_type(&self, id: &str, query: &str) -> Result<String, Error> {
+    pub(crate) async fn create_type(&self, id: &str, query: &str) -> Result<String, PgMcpError> {
+        let operation = "create_type (CREATE TYPE)";
         let conns = self.inner.load();
         let conn = conns
             .get(id)
-            .ok_or_else(|| anyhow::anyhow!("Connection not found"))?;
+            .ok_or_else(|| PgMcpError::ConnectionNotFound(id.to_string()))?;
 
-        let query = validate_sql(
+        let validated_query = validate_sql(
             query,
             |stmt| matches!(stmt, Statement::CreateType { .. }),
-            "Only CREATE TYPE statements are allowed",
+            "CREATE TYPE",
         )?;
 
-        sqlx::query(&query).execute(&conn.pool).await?;
+        sqlx::query(&validated_query)
+            .execute(&conn.pool)
+            .await
+            .map_err(|e| PgMcpError::DatabaseError {
+                operation: operation.to_string(),
+                underlying: e.to_string(),
+            })?;
 
         Ok("success".to_string())
     }
@@ -294,16 +433,48 @@ impl Default for Conns {
     }
 }
 
-fn validate_sql<F>(query: &str, validator: F, error_msg: &'static str) -> Result<String, Error>
+fn validate_sql<F>(
+    query: &str,
+    validator: F,
+    expected_type: &'static str,
+) -> Result<String, PgMcpError>
 where
     F: Fn(&Statement) -> bool,
 {
     let dialect = sqlparser::dialect::PostgreSqlDialect {};
-    let ast = sqlparser::parser::Parser::parse_sql(&dialect, query)?;
-    if ast.len() != 1 || !validator(&ast[0]) {
-        return Err(anyhow::anyhow!(error_msg));
+    let statements = sqlparser::parser::Parser::parse_sql(&dialect, query).map_err(|e| {
+        PgMcpError::ValidationFailed {
+            kind: ValidationErrorKind::ParseError,
+            query: query.to_string(),
+            details: e.to_string(),
+        }
+    })?;
+
+    if statements.len() != 1 {
+        return Err(PgMcpError::ValidationFailed {
+            kind: ValidationErrorKind::InvalidStatementType {
+                expected: expected_type.to_string(),
+            },
+            query: query.to_string(),
+            details: format!(
+                "Expected exactly one SQL statement, found {}",
+                statements.len()
+            ),
+        });
     }
-    Ok(ast[0].to_string())
+
+    let stmt = &statements[0];
+    if !validator(stmt) {
+        return Err(PgMcpError::ValidationFailed {
+            kind: ValidationErrorKind::InvalidStatementType {
+                expected: expected_type.to_string(),
+            },
+            query: query.to_string(),
+            details: format!("Statement type validation failed. Received: {:?}", stmt),
+        });
+    }
+
+    Ok(query.to_string())
 }
 
 #[cfg(test)]
@@ -320,7 +491,6 @@ mod tests {
         );
         let pool = tdb.get_pool().await;
 
-        // Ensure migrations are applied
         sqlx::query("SELECT * FROM test_table LIMIT 1")
             .execute(&pool)
             .await
@@ -336,11 +506,9 @@ mod tests {
         let (_tdb, conn_str) = setup_test_db().await;
         let conns = Conns::new();
 
-        // Test register
         let id = conns.register(conn_str.clone()).await.unwrap();
         assert!(!id.is_empty());
 
-        // Test unregister
         assert!(conns.unregister(id.clone()).is_ok());
         assert!(conns.unregister(id).is_err());
     }
@@ -351,11 +519,9 @@ mod tests {
         let conns = Conns::new();
         let id = conns.register(conn_str).await.unwrap();
 
-        // Test list tables
         let tables = conns.list_tables(&id, "public").await.unwrap();
         assert!(tables.contains("test_table"));
 
-        // Test describe table
         let description = conns.describe(&id, "test_table").await.unwrap();
         assert!(description.contains("id"));
         assert!(description.contains("name"));
@@ -368,20 +534,17 @@ mod tests {
         let conns = Conns::new();
         let id = conns.register(conn_str).await.unwrap();
 
-        // Test create table
         let create_table = "CREATE TABLE test_table2 (id SERIAL PRIMARY KEY, name TEXT)";
         assert_eq!(
             conns.create_table(&id, create_table).await.unwrap(),
             "success"
         );
 
-        // Test drop table
         assert_eq!(
             conns.drop_table(&id, "test_table2").await.unwrap(),
             "success"
         );
 
-        // Test drop table again
         assert!(conns.drop_table(&id, "test_table2").await.is_err());
     }
 
@@ -391,24 +554,20 @@ mod tests {
         let conns = Conns::new();
         let id = conns.register(conn_str).await.unwrap();
 
-        // Test query
         let query = "SELECT * FROM test_table ORDER BY id";
         let result = conns.query(&id, query).await.unwrap();
         assert!(result.contains("test1"));
         assert!(result.contains("test2"));
         assert!(result.contains("test3"));
 
-        // Test insert
         let insert = "INSERT INTO test_table (name) VALUES ('test4')";
         let result = conns.insert(&id, insert).await.unwrap();
         assert!(result.contains("rows_affected: 1"));
 
-        // Test update
         let update = "UPDATE test_table SET name = 'updated' WHERE name = 'test1'";
         let result = conns.update(&id, update).await.unwrap();
         assert!(result.contains("rows_affected: 1"));
 
-        // Test delete
         let result = conns
             .delete(&id, "DELETE FROM test_table WHERE name = 'updated'")
             .await
@@ -422,14 +581,12 @@ mod tests {
         let conns = Conns::new();
         let id = conns.register(conn_str).await.unwrap();
 
-        // Test create index
         let create_index = "CREATE INDEX idx_test_table_new ON test_table (name, created_at)";
         assert_eq!(
             conns.create_index(&id, create_index).await.unwrap(),
             "success"
         );
 
-        // Test drop index
         assert_eq!(
             conns.drop_index(&id, "idx_test_table_new").await.unwrap(),
             "success"
@@ -442,23 +599,18 @@ mod tests {
         let conns = Conns::new();
         let id = conns.register(conn_str).await.unwrap();
 
-        // Test invalid SELECT
         let invalid_query = "INSERT INTO test_table VALUES (1)";
         assert!(conns.query(&id, invalid_query).await.is_err());
 
-        // Test invalid INSERT
         let invalid_insert = "SELECT * FROM test_table";
         assert!(conns.insert(&id, invalid_insert).await.is_err());
 
-        // Test invalid UPDATE
         let invalid_update = "DELETE FROM test_table";
         assert!(conns.update(&id, invalid_update).await.is_err());
 
-        // Test invalid CREATE TABLE
         let invalid_create = "CREATE INDEX idx_test ON test_table (id)";
         assert!(conns.create_table(&id, invalid_create).await.is_err());
 
-        // Test invalid CREATE INDEX
         let invalid_index = "CREATE TABLE test (id INT)";
         assert!(conns.create_index(&id, invalid_index).await.is_err());
     }
@@ -469,14 +621,12 @@ mod tests {
         let conns = Conns::new();
         let id = conns.register(conn_str).await.unwrap();
 
-        // Test create type
         let create_type = "CREATE TYPE user_role AS ENUM ('admin', 'user')";
         assert_eq!(
             conns.create_type(&id, create_type).await.unwrap(),
             "success"
         );
 
-        // Test invalid type creation
         let invalid_type = "CREATE TABLE test (id INT)";
         assert!(conns.create_type(&id, invalid_type).await.is_err());
     }
@@ -487,14 +637,12 @@ mod tests {
         let conns = Conns::new();
         let id = conns.register(conn_str).await.unwrap();
 
-        // Test create schema with valid name
         let schema_name = "test_schema_unit";
         assert_eq!(
             conns.create_schema(&id, schema_name).await.unwrap(),
             "success"
         );
 
-        // Verify schema exists using a query
         let query = format!(
             "SELECT schema_name FROM information_schema.schemata WHERE schema_name = '{}'",
             schema_name
@@ -504,7 +652,6 @@ mod tests {
             .await
             .unwrap();
 
-        // Test create schema with invalid name
         let invalid_schema_name = "test;schema";
         assert!(conns.create_schema(&id, invalid_schema_name).await.is_err());
     }
