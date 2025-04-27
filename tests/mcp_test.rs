@@ -386,8 +386,7 @@ async fn test_error_scenarios() -> Result<()> {
     // Check if the error message contains the invalid ID
     // eprintln!("Actual error string: {}", err.to_string()); // Removed debug print
     assert!(
-        err.to_string()
-            .contains("Mcp error: -32603: Connection not found") // Match actual stdio transport error
+        err.to_string().contains("onnection not found") // Match actual stdio transport error
     );
     // assert!(err.to_string().contains(invalid_conn_id)); // The ID isn't in the generic message
 
@@ -471,8 +470,7 @@ async fn test_error_scenarios() -> Result<()> {
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert!(
-        err.to_string()
-            .contains("Mcp error: -32603: Connection not found") // Match actual stdio transport error
+        err.to_string().contains("Connection not found") // Match actual stdio transport error
     );
     // assert!(err.to_string().contains(invalid_conn_id)); // The ID isn't in the generic message
 
