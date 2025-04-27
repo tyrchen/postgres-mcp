@@ -27,7 +27,7 @@ rmcp = { version = "0.1.5", features = [
 ] }
 schemars = "0.8"
 sqlparser = "0.55"
-tokio = { version = "1.44", features = ["full"] }
+tokio = { version = "1.44", features = ["macros", "rt-multi-thread", "signal"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tracing = "0.1"
