@@ -1,6 +1,6 @@
 [package]
 name = "postgres-mcp"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2024"
 description = "A PostgreSQL MCP (Model Context Protocol) server implementation for building AI agents"
 license = "MIT"
@@ -25,14 +25,14 @@ rmcp = { version = "0.1.5", features = [
   "transport-sse-server",
   "transport-io",
 ] }
-schemars = "0.8"
-sqlparser = "0.55"
-tokio = { version = "1.44", features = ["macros", "rt-multi-thread", "signal"] }
+schemars = "0.9"
+sqlparser = "0.56"
+tokio = { version = "1.45", features = ["macros", "rt-multi-thread", "signal"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-uuid = { version = "1.16", features = ["v4"] }
+uuid = { version = "1.17", features = ["v4"] }
 clap = { version = "4.5", features = ["derive"] }
 axum = { version = "0.8", features = ["macros"] }
 tokio-stream = "0.1"
