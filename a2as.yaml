@@ -1,0 +1,69 @@
+manifest:
+  version: "0.1.2"
+  schema: https://a2as.org/cert/schema
+  subject:
+    name: tyrchen/postgres-mcp
+    source: https://github.com/tyrchen/postgres-mcp
+    branch: master
+    commit: "a75569d4"
+    scope: [agents/pg_agent.py]
+  issued:
+    by: A2AS.org
+    at: '2026-01-26T16:11:06Z'
+  signatures:
+    digest: sha256:jiYyeI9BMiR0R-EcgTY4WUxfoK_JBIkhzrw7rGp7_cw
+    key: ed25519:1rzOg03sISIGZ19TBwiDmXw4YI4UPOKIM0yFOSCbH8Q
+    sig: ed25519:GcCzORX9Dmr_7gljVKC1asqcbmb_TIS5LiRRvaCrhMyieUkQNGzO4n7aQMpQbYEE8GmYHnAfoxU-RFH1Hhk9Aw
+
+agents:
+  agent:
+    type: instance
+    models: [gpt-4.1]
+    mcp: [server]
+    params:
+      function: run
+      name: PostgreSQL Assistant
+      instructions: ['Use the tools to interact with PostgreSQL database and perform operations like querying, creating tables,
+          and managing indexes.']
+
+models:
+  gpt-4.1:
+    type: default
+    agents: [agent]
+
+mcp:
+  server:
+    type: process
+    agents: [agent]
+    params:
+      class: PostgresMCPServer
+      base: MCPServerStdio
+      name: PostgreSQL MCP Server
+      command: postgres-mcp
+      args: [stdio]
+      alias: [mcp_server]
+
+imports:
+  Agent: agents.Agent
+  asyncio: asyncio
+  gen_trace_id: agents.gen_trace_id
+  MCPServer: agents.mcp.MCPServer
+  MCPServerStdio: agents.mcp.MCPServerStdio
+  Optional: typing.Optional
+  os: os
+  Runner: agents.Runner
+  subprocess: subprocess
+  trace: agents.trace
+
+functions:
+  __init__:
+    type: sync
+    module: agents.pg_agent
+    args: [self]
+  main:
+    type: async
+    module: agents.pg_agent
+  run:
+    type: async
+    module: agents.pg_agent
+    args: [mcp_server]
